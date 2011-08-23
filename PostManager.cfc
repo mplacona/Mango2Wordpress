@@ -383,9 +383,11 @@
 	<cffunction name="batchPostWordpress" returntype="boolean" access="public" hint="the big boss. I'll delegate everything, and the functions will obey">
 		<cfargument name="start" type="numeric" default="0" required="true">
 		<cfargument name="limit" type="numeric" default="30" required="true">
+		<cfargument name="convertCodeToPre" type="boolean" default="false" required="false">
 		
 		<cfset var qPosts = getposts(arguments.start, arguments.limit) />
 		<cfset var newPost = 0 />
+		<cfset var translateContent = ""/>
 		
 
 		<cfloop query="qPosts">
@@ -393,12 +395,18 @@
 			<cfset qComments = getPostComments(qPosts.post_id)>
 			<cfset qCategories = getPostCategories(qPosts.post_id)>
 			
+			<cfif convertCodeToPre>
+				<cfset translateContent = reReplaceNoCase(qPosts.content,"<code(.*?)\>","<pre lang='cfm' line='1'>","all") />
+				<cfset translateContent = replaceNoCase(translateContent,"</code>","</pre>","all") />
+			<cfelse>
+				<cfset translasteContent = qPosts.content>
+			</cfif>
 			
 			<!--- Insert the post --->
 			<cfset insertPost = insertPostWordpress(
 				last_modified : qPosts.last_modified,
 				posted_on : qPosts.posted_on,
-				content : qPosts.content,
+				content : translateContent,
 				title : qPosts.title,
 				excerpt : qPosts.excerpt,
 				name : qPosts.name,
