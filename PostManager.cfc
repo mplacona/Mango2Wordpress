@@ -14,7 +14,7 @@
 		<cfargument name="start" type="numeric" default="0" required="true">
 		<cfargument name="limit" type="numeric" default="30" required="false">
 		<cfquery datasource="#this.mango#" name="qPosts">
-			SELECT E.id AS post_id, E.name, E.title, E.content, E.excerpt, E.last_modified, P.posted_on
+			SELECT E.id AS post_id, E.name, E.title, E.content, E.excerpt, E.last_modified, P.posted_on, E.status
 			FROM  `entry` E
 			INNER JOIN `post` P ON E.id = P.id
 			LIMIT #arguments.start# , #arguments.limit#
@@ -51,7 +51,7 @@
 	
 	<cffunction name="getMaxPost" returntype="numeric" access="private" hint="lazy function to get the added post id">
 		<cfquery datasource="#this.wordpress#" name="qMax">
-			SELECT max(id) as MaxPost FROM `wordpress`.`wp_posts` 
+			SELECT max(id) as MaxPost FROM `wp_posts` 
 		</cfquery>
 		
 		<cfreturn qMax.MaxPost>
@@ -149,12 +149,14 @@
 		<cfargument name="excerpt" type="any">
 		<cfargument name="name" type="any">
 		<cfargument name="commentCount" type="any">
+		<cfargument name="status" type="any" default="published">
 		
 		<cfset var cleanContent = cleanupPostCode(arguments.content) />
 		<cfset var cleanExcerpt = cleanupPostCode(arguments.excerpt) />
 		
+		
 		<cfquery name="qInsert" datasource="#this.wordpress#">
-			INSERT INTO `wordpress`.`wp_posts` 
+			INSERT INTO `wp_posts` 
 				(
 					`ID`, 
 					`post_author`, 
@@ -186,9 +188,9 @@
 					'1', 
 					#createODBCDate(arguments.posted_on)#, 
 					#createODBCDate(arguments.posted_on)#, 
-					'#cleanContent#', 
-					'#arguments.title#', 
-					'#cleanExcerpt#', 
+					<cfqueryparam value="#cleanContent#">,
+					<cfqueryparam value="#arguments.title#">, 
+					<cfqueryparam value="#cleanExcerpt#">, 
 					'publish', 
 					'open', 
 					'open', 
@@ -202,7 +204,11 @@
 					'0', 
 					'', 
 					'0', 
-					'post', 
+					<cfif arguments.status EQ "draft">
+						'revision',
+					<cfelse>
+						'post',
+					</cfif> 
 					'', 
 					'#arguments.commentCount#'
 				);
@@ -218,7 +224,7 @@
 		<cfargument name="content" type="any">
 		
 		<cfquery datasource="#this.wordpress#" name="qInsertComment">
-			INSERT INTO  `wordpress`.`wp_comments` 
+			INSERT INTO  `wp_comments` 
 				(
 					`comment_ID` ,
 					`comment_post_ID` ,
@@ -246,7 +252,7 @@
 					'',  
 					#createODBCDate(arguments.created_on)#,  
 					#createODBCDate(arguments.created_on)#, 
-					'#arguments.content#',  
+					<cfqueryparam value="#arguments.content#">,  
 					'0',  
 					'1',  
 					'',  
@@ -271,7 +277,7 @@
 				<!--- Check if the category already exists --->
 				<cfquery datasource="#this.wordpress#" name="qCategoryExist">
 					SELECT term_id
-					FROM  `wordpress`.`wp_terms` 
+					FROM  `wp_terms` 
 					WHERE slug =  '#qCategories.name#'
 				</cfquery>
 				
@@ -279,7 +285,7 @@
 				<cfif NOT qCategoryExist.recordCount>
 					<cftransaction>
 						<cfquery datasource="#this.wordpress#" name="qInsertCategory">
-							INSERT INTO  `wordpress`.`wp_terms` 
+							INSERT INTO  `wp_terms` 
 								(						
 									`term_id` ,
 									`name` ,
@@ -294,7 +300,7 @@
 									'0'
 								);
 						</cfquery>
-						<cfquery datasource="wordpress" name="getNewID">
+						<cfquery datasource="#this.wordpress#" name="getNewID">
 							SELECT LAST_INSERT_ID() AS term_id;
 						</cfquery>				
 					</cftransaction>
@@ -304,7 +310,7 @@
 					<cftransaction>
 						<!--- Insert the term taxonomy --->
 						<cfquery datasource="#this.wordpress#" name="qInsertTaxonomyCategory">
-							INSERT INTO  `wordpress`.`wp_term_taxonomy` 
+							INSERT INTO  `wp_term_taxonomy` 
 								(
 									`term_taxonomy_id` ,
 									`term_id` ,
@@ -330,13 +336,13 @@
 				<!--- Get the taxonomy ID --->
 				<cfquery datasource="#this.wordpress#" name="getTaxonomyId">
 					SELECT 	term_taxonomy_id 
-					FROM  	`wordpress`.`wp_term_taxonomy`
+					FROM  	`wp_term_taxonomy`
 					WHERE	term_id = '#term_id#'
 				</cfquery>
 				
 				<!--- Now insert a relationship between the entry and the category (either existing or newly created) --->
 				<cfquery datasource="#this.wordpress#" name="qRelateEntryCategory">
-					INSERT INTO  `wordpress`.`wp_term_relationships` 
+					INSERT INTO  `wp_term_relationships` 
 						(
 							`object_id` ,
 							`term_taxonomy_id` ,
@@ -380,10 +386,12 @@
 		<cfset var qPosts = getposts(arguments.start, arguments.limit) />
 		<cfset var newPost = 0 />
 		
+
 		<cfloop query="qPosts">
 			<!--- Get the comments per post --->
 			<cfset qComments = getPostComments(qPosts.post_id)>
 			<cfset qCategories = getPostCategories(qPosts.post_id)>
+			
 			
 			<!--- Insert the post --->
 			<cfset insertPost = insertPostWordpress(
@@ -393,7 +401,8 @@
 				title : qPosts.title,
 				excerpt : qPosts.excerpt,
 				name : qPosts.name,
-				commentCount : qComments.recordCount
+				commentCount : qComments.recordCount,
+				status : qPosts.status
 			) />
 			
 			<cfset newPost = getMaxPost()>
