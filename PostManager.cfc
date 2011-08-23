@@ -27,7 +27,7 @@
 		<cfargument name="post_id" type="uuid" required="true">
 		
 		<cfquery datasource="#this.mango#" name="qComments">
-			SELECT  `creator_email` ,  `creator_name` ,  `creator_url` ,  `created_on` ,  `content` 
+			SELECT  `creator_email` ,  `creator_name` ,  `creator_url` ,  `created_on` ,  `content` , `approved`
 			FROM  `comment` 
 			WHERE entry_id =  '#arguments.post_id#'
 		</cfquery>
@@ -222,6 +222,7 @@
 		<cfargument name="creator_url" type="any">
 		<cfargument name="created_on" type="any">
 		<cfargument name="content" type="any">
+		<cfargument name="approved" type="any" default="0">
 		
 		<cfquery datasource="#this.wordpress#" name="qInsertComment">
 			INSERT INTO  `wp_comments` 
@@ -254,7 +255,7 @@
 					#createODBCDate(arguments.created_on)#, 
 					<cfqueryparam value="#arguments.content#">,  
 					'0',  
-					'1',  
+					<cfqueryparam value="#arguments.approved#">, 
 					'',  
 					'',  
 					'0',  
@@ -415,7 +416,8 @@
 					creator_email : qComments.creator_email,
 					creator_url : qComments.creator_url,
 					created_on : qComments.created_on,
-					content : qComments.content
+					content : qComments.content,
+					approved: qComments.approved
 				) />
 			</cfloop>
 			
