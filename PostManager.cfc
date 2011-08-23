@@ -191,7 +191,11 @@
 					<cfqueryparam value="#cleanContent#">,
 					<cfqueryparam value="#arguments.title#">, 
 					<cfqueryparam value="#cleanExcerpt#">, 
-					'publish', 
+					<cfif arguments.status EQ "draft">
+						'draft',
+					<cfelse>
+						'publish',
+					</cfif> 
 					'open', 
 					'open', 
 					'', 
@@ -204,11 +208,7 @@
 					'0', 
 					'', 
 					'0', 
-					<cfif arguments.status EQ "draft">
-						'revision',
-					<cfelse>
-						'post',
-					</cfif> 
+					'post', 
 					'', 
 					'#arguments.commentCount#'
 				);
