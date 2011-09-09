@@ -2,10 +2,12 @@
 	<cffunction name="init" access="public" output="false" returntype="Object" hint="constructor">
 		<cfargument name="mango_dsn" type="string" required="true">
 		<cfargument name="wordpress_dsn" type="string" required="true">
+		<cfargument name="db_prefix" type="string" required="false" default="wp_">
 		
 		<!--- Set the DSN's to be used globally by this component --->
 	  	<cfset this.mango = arguments.mango_dsn>
 		<cfset this.wordpress = arguments.wordpress_dsn>
+		<cfset this.db_prefix = arguments.db_prefix>
 		
       	<cfreturn this />
    	</cffunction>
@@ -51,7 +53,7 @@
 	
 	<cffunction name="getMaxPost" returntype="numeric" access="private" hint="lazy function to get the added post id">
 		<cfquery datasource="#this.wordpress#" name="qMax">
-			SELECT max(id) as MaxPost FROM `wp_posts` 
+			SELECT max(id) as MaxPost FROM `#this.db_prefix#posts` 
 		</cfquery>
 		
 		<cfreturn qMax.MaxPost>
@@ -156,7 +158,7 @@
 		
 		
 		<cfquery name="qInsert" datasource="#this.wordpress#">
-			INSERT INTO `wp_posts` 
+			INSERT INTO `#this.db_prefix#posts` 
 				(
 					`ID`, 
 					`post_author`, 
@@ -225,7 +227,7 @@
 		<cfargument name="approved" type="any" default="0">
 		
 		<cfquery datasource="#this.wordpress#" name="qInsertComment">
-			INSERT INTO  `wp_comments` 
+			INSERT INTO  `#this.db_prefix#comments` 
 				(
 					`comment_ID` ,
 					`comment_post_ID` ,
@@ -278,7 +280,7 @@
 				<!--- Check if the category already exists --->
 				<cfquery datasource="#this.wordpress#" name="qCategoryExist">
 					SELECT term_id
-					FROM  `wp_terms` 
+					FROM  `#this.db_prefix#terms` 
 					WHERE slug =  '#qCategories.name#'
 				</cfquery>
 				
@@ -286,7 +288,7 @@
 				<cfif NOT qCategoryExist.recordCount>
 					<cftransaction>
 						<cfquery datasource="#this.wordpress#" name="qInsertCategory">
-							INSERT INTO  `wp_terms` 
+							INSERT INTO  `#this.db_prefix#terms` 
 								(						
 									`term_id` ,
 									`name` ,
@@ -311,7 +313,7 @@
 					<cftransaction>
 						<!--- Insert the term taxonomy --->
 						<cfquery datasource="#this.wordpress#" name="qInsertTaxonomyCategory">
-							INSERT INTO  `wp_term_taxonomy` 
+							INSERT INTO  `#this.db_prefix#term_taxonomy` 
 								(
 									`term_taxonomy_id` ,
 									`term_id` ,
@@ -337,13 +339,13 @@
 				<!--- Get the taxonomy ID --->
 				<cfquery datasource="#this.wordpress#" name="getTaxonomyId">
 					SELECT 	term_taxonomy_id 
-					FROM  	`wp_term_taxonomy`
+					FROM  	`#this.db_prefix#term_taxonomy`
 					WHERE	term_id = '#term_id#'
 				</cfquery>
 				
 				<!--- Now insert a relationship between the entry and the category (either existing or newly created) --->
 				<cfquery datasource="#this.wordpress#" name="qRelateEntryCategory">
-					INSERT INTO  `wp_term_relationships` 
+					INSERT INTO  `#this.db_prefix#term_relationships` 
 						(
 							`object_id` ,
 							`term_taxonomy_id` ,
@@ -363,18 +365,18 @@
 	<cffunction name="updateCategoryCounters" returntype="void" access="private" hint="categories have counters with number of posts, so they need to be updated during migration">
 		<cfquery datasource="#this.wordpress#" name="qCategories">
 			SELECT 	term_taxonomy_id
-			FROM  	`wp_term_taxonomy` 
+			FROM  	`#this.db_prefix#term_taxonomy` 
 		</cfquery>
 		
 		<cfloop query="qCategories">
 			<cfquery datasource="#this.wordpress#" name="qCategoryCounter">
 				SELECT COUNT( object_id ) AS catCounter
-				FROM wp_term_relationships
+				FROM #this.db_prefix#term_relationships
 				WHERE term_taxonomy_id = #qCategories.term_taxonomy_id#
 			</cfquery>
 			
 			<cfquery datasource="#this.wordpress#" name="qCounterupdate">
-				UPDATE  `wp_term_taxonomy` SET count = #qCategoryCounter.catCounter# WHERE term_taxonomy_id = #qCategories.term_taxonomy_id#
+				UPDATE  `#this.db_prefix#term_taxonomy` SET count = #qCategoryCounter.catCounter# WHERE term_taxonomy_id = #qCategories.term_taxonomy_id#
 			</cfquery>
 		</cfloop>
 		
