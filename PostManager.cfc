@@ -2,10 +2,12 @@
 	<cffunction name="init" access="public" output="false" returntype="Object" hint="constructor">
 		<cfargument name="mango_dsn" type="string" required="true">
 		<cfargument name="wordpress_dsn" type="string" required="true">
+		<cfargument name="db_prefix" type="string" required="false" default="wp_">
 		
 		<!--- Set the DSN's to be used globally by this component --->
 	  	<cfset this.mango = arguments.mango_dsn>
 		<cfset this.wordpress = arguments.wordpress_dsn>
+		<cfset this.db_prefix = arguments.db_prefix>
 		
       	<cfreturn this />
    	</cffunction>
@@ -14,7 +16,7 @@
 		<cfargument name="start" type="numeric" default="0" required="true">
 		<cfargument name="limit" type="numeric" default="30" required="false">
 		<cfquery datasource="#this.mango#" name="qPosts">
-			SELECT E.id AS post_id, E.name, E.title, E.content, E.excerpt, E.last_modified, P.posted_on
+			SELECT E.id AS post_id, E.name, E.title, E.content, E.excerpt, E.last_modified, P.posted_on, E.status
 			FROM  `entry` E
 			INNER JOIN `post` P ON E.id = P.id
 			LIMIT #arguments.start# , #arguments.limit#
@@ -27,7 +29,7 @@
 		<cfargument name="post_id" type="uuid" required="true">
 		
 		<cfquery datasource="#this.mango#" name="qComments">
-			SELECT  `creator_email` ,  `creator_name` ,  `creator_url` ,  `created_on` ,  `content` 
+			SELECT  `creator_email` ,  `creator_name` ,  `creator_url` ,  `created_on` ,  `content` , `approved`
 			FROM  `comment` 
 			WHERE entry_id =  '#arguments.post_id#'
 		</cfquery>
@@ -51,7 +53,7 @@
 	
 	<cffunction name="getMaxPost" returntype="numeric" access="private" hint="lazy function to get the added post id">
 		<cfquery datasource="#this.wordpress#" name="qMax">
-			SELECT max(id) as MaxPost FROM `wordpress`.`wp_posts` 
+			SELECT max(id) as MaxPost FROM `#this.db_prefix#posts` 
 		</cfquery>
 		
 		<cfreturn qMax.MaxPost>
@@ -149,12 +151,14 @@
 		<cfargument name="excerpt" type="any">
 		<cfargument name="name" type="any">
 		<cfargument name="commentCount" type="any">
+		<cfargument name="status" type="any" default="published">
 		
 		<cfset var cleanContent = cleanupPostCode(arguments.content) />
 		<cfset var cleanExcerpt = cleanupPostCode(arguments.excerpt) />
 		
+		
 		<cfquery name="qInsert" datasource="#this.wordpress#">
-			INSERT INTO `wordpress`.`wp_posts` 
+			INSERT INTO `#this.db_prefix#posts` 
 				(
 					`ID`, 
 					`post_author`, 
@@ -186,10 +190,14 @@
 					'1', 
 					#createODBCDate(arguments.posted_on)#, 
 					#createODBCDate(arguments.posted_on)#, 
-					'#cleanContent#', 
-					'#arguments.title#', 
-					'#cleanExcerpt#', 
-					'publish', 
+					<cfqueryparam value="#cleanContent#">,
+					<cfqueryparam value="#arguments.title#">, 
+					<cfqueryparam value="#cleanExcerpt#">, 
+					<cfif arguments.status EQ "draft">
+						'draft',
+					<cfelse>
+						'publish',
+					</cfif> 
 					'open', 
 					'open', 
 					'', 
@@ -216,9 +224,10 @@
 		<cfargument name="creator_url" type="any">
 		<cfargument name="created_on" type="any">
 		<cfargument name="content" type="any">
+		<cfargument name="approved" type="any" default="0">
 		
 		<cfquery datasource="#this.wordpress#" name="qInsertComment">
-			INSERT INTO  `wordpress`.`wp_comments` 
+			INSERT INTO  `#this.db_prefix#comments` 
 				(
 					`comment_ID` ,
 					`comment_post_ID` ,
@@ -246,9 +255,9 @@
 					'',  
 					#createODBCDate(arguments.created_on)#,  
 					#createODBCDate(arguments.created_on)#, 
-					'#arguments.content#',  
+					<cfqueryparam value="#arguments.content#">,  
 					'0',  
-					'1',  
+					<cfqueryparam value="#arguments.approved#">, 
 					'',  
 					'',  
 					'0',  
@@ -271,7 +280,7 @@
 				<!--- Check if the category already exists --->
 				<cfquery datasource="#this.wordpress#" name="qCategoryExist">
 					SELECT term_id
-					FROM  `wordpress`.`wp_terms` 
+					FROM  `#this.db_prefix#terms` 
 					WHERE slug =  '#qCategories.name#'
 				</cfquery>
 				
@@ -279,7 +288,7 @@
 				<cfif NOT qCategoryExist.recordCount>
 					<cftransaction>
 						<cfquery datasource="#this.wordpress#" name="qInsertCategory">
-							INSERT INTO  `wordpress`.`wp_terms` 
+							INSERT INTO  `#this.db_prefix#terms` 
 								(						
 									`term_id` ,
 									`name` ,
@@ -294,7 +303,7 @@
 									'0'
 								);
 						</cfquery>
-						<cfquery datasource="wordpress" name="getNewID">
+						<cfquery datasource="#this.wordpress#" name="getNewID">
 							SELECT LAST_INSERT_ID() AS term_id;
 						</cfquery>				
 					</cftransaction>
@@ -304,7 +313,7 @@
 					<cftransaction>
 						<!--- Insert the term taxonomy --->
 						<cfquery datasource="#this.wordpress#" name="qInsertTaxonomyCategory">
-							INSERT INTO  `wordpress`.`wp_term_taxonomy` 
+							INSERT INTO  `#this.db_prefix#term_taxonomy` 
 								(
 									`term_taxonomy_id` ,
 									`term_id` ,
@@ -330,13 +339,13 @@
 				<!--- Get the taxonomy ID --->
 				<cfquery datasource="#this.wordpress#" name="getTaxonomyId">
 					SELECT 	term_taxonomy_id 
-					FROM  	`wordpress`.`wp_term_taxonomy`
+					FROM  	`#this.db_prefix#term_taxonomy`
 					WHERE	term_id = '#term_id#'
 				</cfquery>
 				
 				<!--- Now insert a relationship between the entry and the category (either existing or newly created) --->
 				<cfquery datasource="#this.wordpress#" name="qRelateEntryCategory">
-					INSERT INTO  `wordpress`.`wp_term_relationships` 
+					INSERT INTO  `#this.db_prefix#term_relationships` 
 						(
 							`object_id` ,
 							`term_taxonomy_id` ,
@@ -356,18 +365,18 @@
 	<cffunction name="updateCategoryCounters" returntype="void" access="private" hint="categories have counters with number of posts, so they need to be updated during migration">
 		<cfquery datasource="#this.wordpress#" name="qCategories">
 			SELECT 	term_taxonomy_id
-			FROM  	`wp_term_taxonomy` 
+			FROM  	`#this.db_prefix#term_taxonomy` 
 		</cfquery>
 		
 		<cfloop query="qCategories">
 			<cfquery datasource="#this.wordpress#" name="qCategoryCounter">
 				SELECT COUNT( object_id ) AS catCounter
-				FROM wp_term_relationships
+				FROM #this.db_prefix#term_relationships
 				WHERE term_taxonomy_id = #qCategories.term_taxonomy_id#
 			</cfquery>
 			
 			<cfquery datasource="#this.wordpress#" name="qCounterupdate">
-				UPDATE  `wp_term_taxonomy` SET count = #qCategoryCounter.catCounter# WHERE term_taxonomy_id = #qCategories.term_taxonomy_id#
+				UPDATE  `#this.db_prefix#term_taxonomy` SET count = #qCategoryCounter.catCounter# WHERE term_taxonomy_id = #qCategories.term_taxonomy_id#
 			</cfquery>
 		</cfloop>
 		
@@ -376,24 +385,35 @@
 	<cffunction name="batchPostWordpress" returntype="boolean" access="public" hint="the big boss. I'll delegate everything, and the functions will obey">
 		<cfargument name="start" type="numeric" default="0" required="true">
 		<cfargument name="limit" type="numeric" default="30" required="true">
+		<cfargument name="convertCodeToPre" type="boolean" default="false" required="false">
 		
 		<cfset var qPosts = getposts(arguments.start, arguments.limit) />
 		<cfset var newPost = 0 />
+		<cfset var translateContent = ""/>
 		
+
 		<cfloop query="qPosts">
 			<!--- Get the comments per post --->
 			<cfset qComments = getPostComments(qPosts.post_id)>
 			<cfset qCategories = getPostCategories(qPosts.post_id)>
 			
+			<cfif convertCodeToPre>
+				<cfset translateContent = reReplaceNoCase(qPosts.content,"<code(.*?)\>","<pre lang='cfm' line='1'>","all") />
+				<cfset translateContent = replaceNoCase(translateContent,"</code>","</pre>","all") />
+			<cfelse>
+				<cfset translasteContent = qPosts.content>
+			</cfif>
+			
 			<!--- Insert the post --->
 			<cfset insertPost = insertPostWordpress(
 				last_modified : qPosts.last_modified,
 				posted_on : qPosts.posted_on,
-				content : qPosts.content,
+				content : translateContent,
 				title : qPosts.title,
 				excerpt : qPosts.excerpt,
 				name : qPosts.name,
-				commentCount : qComments.recordCount
+				commentCount : qComments.recordCount,
+				status : qPosts.status
 			) />
 			
 			<cfset newPost = getMaxPost()>
@@ -406,7 +426,8 @@
 					creator_email : qComments.creator_email,
 					creator_url : qComments.creator_url,
 					created_on : qComments.created_on,
-					content : qComments.content
+					content : qComments.content,
+					approved: qComments.approved
 				) />
 			</cfloop>
 			
