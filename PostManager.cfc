@@ -354,7 +354,7 @@
 					FROM  	`#this.db_prefix#term_taxonomy`
 					WHERE	term_id = '#term_id#'
 				</cfquery>
-				getTaxonomyId qRelateEntryCategory
+				
 				<!--- Now insert a relationship between the entry and the category (either existing or newly created) --->
 				<cfquery datasource="#this.wordpress#" name="qRelateEntryCategory">
 					INSERT INTO  `#this.db_prefix#term_relationships` 
