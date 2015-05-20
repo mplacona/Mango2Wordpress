@@ -15,6 +15,8 @@
 	<cffunction name="getposts" returntype="query" access="private" hint="Return mangoblog posts content">
 		<cfargument name="start" type="numeric" default="0" required="true">
 		<cfargument name="limit" type="numeric" default="30" required="false">
+		<cfset var qPosts = "">
+		
 		<cfquery datasource="#this.mango#" name="qPosts">
 			SELECT E.id AS post_id, E.name, E.title, E.content, E.excerpt, E.last_modified, P.posted_on, E.status
 			FROM  `entry` E
@@ -27,6 +29,7 @@
 	
 	<cffunction name="getPostComments" returntype="query" access="private" hint="get mangoblog post comments">
 		<cfargument name="post_id" type="uuid" required="true">
+		<cfset var qComments = "">
 		
 		<cfquery datasource="#this.mango#" name="qComments">
 			SELECT  `creator_email` ,  `creator_name` ,  `creator_url` ,  `created_on` ,  `content` , `approved`
@@ -39,6 +42,7 @@
 	
 	<cffunction name="getPostCategories" returntype="query" access="private" hint="get all the categories by mangoblog post">
 		<cfargument name="post_id" type="uuid" required="true">
+		<cfset var qCategories = "">
 		
 		<cfquery datasource="#this.mango#" name="qCategories">
 			SELECT name, title, description
@@ -52,6 +56,7 @@
 	</cffunction>
 	
 	<cffunction name="getMaxPost" returntype="numeric" access="private" hint="lazy function to get the added post id">
+		<cfset var qMax = "">
 		<cfquery datasource="#this.wordpress#" name="qMax">
 			SELECT max(id) as MaxPost FROM `#this.db_prefix#posts` 
 		</cfquery>
@@ -155,7 +160,7 @@
 		
 		<cfset var cleanContent = cleanupPostCode(arguments.content) />
 		<cfset var cleanExcerpt = cleanupPostCode(arguments.excerpt) />
-		
+		<cfset var qInsert = "">
 		
 		<cfquery name="qInsert" datasource="#this.wordpress#">
 			INSERT INTO `#this.db_prefix#posts` 
@@ -225,6 +230,7 @@
 		<cfargument name="created_on" type="any">
 		<cfargument name="content" type="any">
 		<cfargument name="approved" type="any" default="0">
+		<cfset var qInsertComment = "">
 		
 		<cfquery datasource="#this.wordpress#" name="qInsertComment">
 			INSERT INTO  `#this.db_prefix#comments` 
@@ -273,6 +279,12 @@
 		
 		<cfset var qCategories = arguments.qCategories />
 		<cfset var term_id = 0 />
+		<cfset var qCategoryExist = "">
+		<cfset var qInsertCategory = "">
+		<cfset var qGetNewID = "">
+		<cfset var qInsertTaxonomyCategory = "">
+		<cfset var getTaxonomyId = "">
+		<cfset var qRelateEntryCategory = "">
 		
 		<cfif qCategories.recordCount>
 			<cfloop query="qCategories">
@@ -342,7 +354,7 @@
 					FROM  	`#this.db_prefix#term_taxonomy`
 					WHERE	term_id = '#term_id#'
 				</cfquery>
-				
+				getTaxonomyId qRelateEntryCategory
 				<!--- Now insert a relationship between the entry and the category (either existing or newly created) --->
 				<cfquery datasource="#this.wordpress#" name="qRelateEntryCategory">
 					INSERT INTO  `#this.db_prefix#term_relationships` 
@@ -363,6 +375,10 @@
 	</cffunction>
 
 	<cffunction name="updateCategoryCounters" returntype="void" access="private" hint="categories have counters with number of posts, so they need to be updated during migration">
+		<cfset var qCategories = "">
+		<cfset var qCategoryCounter = "">
+		<cfset var qCounterupdate = "">
+		
 		<cfquery datasource="#this.wordpress#" name="qCategories">
 			SELECT 	term_taxonomy_id
 			FROM  	`#this.db_prefix#term_taxonomy` 
@@ -401,7 +417,7 @@
 				<cfset translateContent = reReplaceNoCase(qPosts.content,"<code(.*?)\>","<pre lang='cfm' line='1'>","all") />
 				<cfset translateContent = replaceNoCase(translateContent,"</code>","</pre>","all") />
 			<cfelse>
-				<cfset translasteContent = qPosts.content>
+				<cfset translateContent = qPosts.content>
 			</cfif>
 			
 			<!--- Insert the post --->
