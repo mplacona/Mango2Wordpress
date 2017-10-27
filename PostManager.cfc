@@ -1,5 +1,5 @@
 <cfcomponent displayname="PostManager" output="false">
-	<cffunction name="init" access="public" output="false" returntype="Object" hint="constructor">
+	<cffunction name="init" access="public" output="false" returntype="any" hint="constructor">
 		<cfargument name="mango_dsn" type="string" required="true">
 		<cfargument name="wordpress_dsn" type="string" required="true">
 		<cfargument name="db_prefix" type="string" required="false" default="wp_">
@@ -122,30 +122,30 @@
 	<cffunction name="cleanupPostCode" returntype="string" access="private" hint="You give me some post content and I'll clean it up and format it properly">
 		<cfargument name="content" type="string" required="true">
 		
-		<cfset var content = arguments.content>
-		<cfset var matches = javaReg('\<p\>\[code:[a-zA-Z]+\](.*?)\[\/code\]\<\/p\>',content,'g') />
+		<cfset var local.content = arguments.content>
+		<cfset var matches = javaReg('\<p\>\[code:[a-zA-Z]+\](.*?)\[\/code\]\<\/p\>',local.content,'g') />
 		<cfset var strContent = "" />
 					
 		<cfloop array="#matches#" index="arrMatch">
 			<cfset strContent = rereplace(arrMatch, 'code:([a-zA-Z]+)', 'code language="\1"', 'ALL') />
-			<cfset content = replaceNoCase(content, arrMatch, strContent, "ALL") />
+			<cfset local.content = replaceNoCase(local.content, arrMatch, strContent, "ALL") />
 			
 			<!--- Remove unnecessary line-breaks from code blocks --->
-			<cfset content = rereplace(content, "<br \/?>", "\n", "ALL")>
+			<cfset local.content = rereplace(local.content, "<br \/?>", "\n", "ALL")>
 			
 			<!--- replace &lt; and &gt; with the tags themselves --->
-			<cfset content = replace(content, "&lt;", "<", "ALL")>
-			<cfset content = replace(content, "&gt;", ">", "ALL")>
+			<cfset local.content = replace(local.content, "&lt;", "<", "ALL")>
+			<cfset local.content = replace(local.content, "&gt;", ">", "ALL")>
 		</cfloop>
 		
 		<!--- Remove the annoying p tags --->
-		<cfset content = rereplace(content, "</?p>", "", "ALL") />
+		<cfset local.content = rereplace(local.content, "</?p>", "", "ALL") />
 		
 		<!--- Now remove the old "textareas" --->
-		<cfset content = rereplace(content, '<textarea[^>]+class=\"([a-zA-Z]+)\"\>', '[code language="\1"]', "ALL") />
-		<cfset content = replace(content, '</textarea>', '[/code]', "ALL") />
+		<cfset local.content = rereplace(local.content, '<textarea[^>]+class=\"([a-zA-Z]+)\"\>', '[code language="\1"]', "ALL") />
+		<cfset local.content = replace(local.content, '</textarea>', '[/code]', "ALL") />
 		
-		<cfreturn content>
+		<cfreturn local.content>
 	</cffunction>
 	
 	<cffunction name="insertPostWordpress" returntype="void" access="private" hint="inser a post into wordpress blog">
@@ -193,8 +193,8 @@
 				(
 					NULL, 
 					'1', 
-					#createODBCDate(arguments.posted_on)#, 
-					#createODBCDate(arguments.posted_on)#, 
+					#createODBCDateTime(arguments.posted_on)#, 
+					#dateConvert('local2utc', createODBCDateTime(arguments.posted_on))#, 
 					<cfqueryparam value="#cleanContent#">,
 					<cfqueryparam value="#arguments.title#">, 
 					<cfqueryparam value="#cleanExcerpt#">, 
@@ -209,8 +209,8 @@
 					'#arguments.name#', 
 					'', 
 					'', 
-					#createODBCDate(arguments.last_modified)#, 
-					#createODBCDate(arguments.last_modified)#, 
+					#createODBCDateTime(arguments.last_modified)#, 
+					#dateConvert('local2utc', createODBCDateTime(arguments.last_modified))#, 
 					'', 
 					'0', 
 					'', 
@@ -259,8 +259,8 @@
 					'#arguments.creator_email#', 
 					'#arguments.creator_url#',  
 					'',  
-					#createODBCDate(arguments.created_on)#,  
-					#createODBCDate(arguments.created_on)#, 
+					#createODBCDateTime(arguments.created_on)#,  
+					#dateConvert('local2utc', createODBCDateTime(arguments.created_on))#, 
 					<cfqueryparam value="#arguments.content#">,  
 					'0',  
 					<cfqueryparam value="#arguments.approved#">, 
@@ -277,7 +277,7 @@
 		<cfargument name="qCategories" type="query" required="true">
 		<cfargument name="post_id" type="numeric" required="true">
 		
-		<cfset var qCategories = arguments.qCategories />
+		<cfset var local.qCategories = arguments.qCategories />
 		<cfset var term_id = 0 />
 		<cfset var qCategoryExist = "">
 		<cfset var qInsertCategory = "">
@@ -286,14 +286,14 @@
 		<cfset var getTaxonomyId = "">
 		<cfset var qRelateEntryCategory = "">
 		
-		<cfif qCategories.recordCount>
-			<cfloop query="qCategories">
+		<cfif local.qCategories.recordCount>
+			<cfloop query="local.qCategories">
 				
 				<!--- Check if the category already exists --->
 				<cfquery datasource="#this.wordpress#" name="qCategoryExist">
 					SELECT term_id
 					FROM  `#this.db_prefix#terms` 
-					WHERE slug =  '#qCategories.name#'
+					WHERE slug =  '#local.qCategories.name#'
 				</cfquery>
 				
 				<!--- If it doesn't, then add it --->
@@ -310,8 +310,8 @@
 							VALUES 
 								(
 									NULL ,  
-									'#qCategories.title#',  
-									'#qCategories.name#',  
+									'#local.qCategories.title#',  
+									'#local.qCategories.name#',  
 									'0'
 								);
 						</cfquery>
@@ -338,7 +338,7 @@
 									NULL ,  
 									'#term_id#',  
 									'category',  
-									'#qCategories.description#',  
+									'#local.qCategories.description#',  
 									'0',  
 									'0'
 								);
